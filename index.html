@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ff000f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Canaline ABB">
+<title>Canaline ABB</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Canaline ABB</h1>
+  <span id="syncBadge" class="badge" title="Stato sincronizzazione">locale</span>
+  <span id="userBadge" class="badge user-badge" title="Utente attivo"></span>
+  <button id="notifBtn" class="notif-btn" aria-label="Notifiche" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span id="notifBadge" class="notif-badge" hidden>0</span>
+  </button>
+  <button id="shareBtn" class="btn ghost" type="button">Condividi</button>
+</header>
+
+<main>
+  <!-- MAGAZZINO -->
+  <section id="tab-magazzino" class="tab active">
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Cerca: 60x80, codice o cliente…" autocomplete="off">
+      <div class="chips" role="tablist">
+        <button class="chip active" data-filter="tutte" type="button">Tutte</button>
+        <button class="chip" data-filter="riordinare" type="button">Da riordinare</button>
+      </div>
+    </div>
+
+    <!-- Statistiche -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num" id="totalCount">0</div>
+        <div class="stat-label">tipi</div>
+      </div>
+      <div class="stat-box warn">
+        <div class="stat-num" id="reorderCount">0</div>
+        <div class="stat-label">da riordinare</div>
+      </div>
+    </div>
+
+    <p class="tip">Tocca il nome per carico/scarico multiplo o soglia</p>
+
+    <!-- Lista raggruppata per altezza -->
+    <div id="itemGroups"></div>
+    <p id="emptyItems" class="empty" hidden>Nessuna canalina. Premi "+" per aggiungerne una.</p>
+  </section>
+
+  <!-- UTILIZZO -->
+  <section id="tab-utilizzo" class="tab">
+    <div class="util-card">
+      <!-- Filtri -->
+      <div class="util-filters">
+        <div class="util-filter-group">
+          <label class="util-filter-label" for="utilCanale">Canalina</label>
+          <select id="utilCanale" class="util-select">
+            <option value="">Tutte le canaline</option>
+          </select>
+        </div>
+        <div class="util-filter-group">
+          <label class="util-filter-label" for="utilPeriodo">Periodo</label>
+          <select id="utilPeriodo" class="util-select">
+            <option value="30">30 giorni</option>
+            <option value="60">60 giorni</option>
+            <option value="90" selected>90 giorni</option>
+            <option value="180">180 giorni</option>
+            <option value="365">1 anno</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Grafico -->
+      <div class="util-chart-label">Pezzi scaricati per settimana</div>
+      <div class="util-chart-wrap">
+        <canvas id="usageChart" height="160"></canvas>
+      </div>
+
+      <!-- Stats -->
+      <div class="util-stats">
+        <div class="util-stat">
+          <div class="util-stat-num" id="uTotale">0</div>
+          <div class="util-stat-label">usati</div>
+        </div>
+        <div class="util-stat">
+          <div class="util-stat-num" id="uSettimana">0.0</div>
+          <div class="util-stat-label">a settimana</div>
+        </div>
+        <div class="util-stat">
+          <div class="util-stat-num" id="uSoglia">0</div>
+          <div class="util-stat-label">soglia suggerita</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Soglia riordino suggerita -->
+    <div class="util-card" style="margin-top:14px">
+      <div class="util-reorder-title">Soglia di riordino suggerita</div>
+      <div class="util-reorder-sub">Consumo medio giornaliero × (tempi di consegna + scorta di sicurezza)</div>
+      <div class="util-reorder-inputs">
+        <div class="util-ri-group">
+          <label class="util-filter-label" for="rConsegna">Consegna (giorni)</label>
+          <input id="rConsegna" type="number" min="0" step="1" value="7" class="util-ri-input">
+        </div>
+        <div class="util-ri-group">
+          <label class="util-filter-label" for="rSicurezza">Sicurezza (giorni)</label>
+          <input id="rSicurezza" type="number" min="0" step="1" value="3" class="util-ri-input">
+        </div>
+      </div>
+      <table class="util-table">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th class="num">Usati</th>
+            <th class="num">Soglia</th>
+            <th class="num">Suggerita</th>
+          </tr>
+        </thead>
+        <tbody id="reorderTable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- STORICO -->
+  <section id="tab-storico" class="tab">
+    <h2>Storico movimenti</h2>
+    <ul id="histList" class="list"></ul>
+    <p id="emptyHist" class="empty" hidden>Nessun movimento registrato.</p>
+  </section>
+
+  <!-- DATI -->
+  <section id="tab-dati" class="tab">
+    <h2>Dati e impostazioni</h2>
+
+    <div class="card form">
+      <h3>Amministratore</h3>
+      <p class="hint">Sblocca le funzioni avanzate (notifiche riordino, ecc.) inserendo la password amministratore.</p>
+      <div id="adminStatus" class="admin-status">
+        <span id="adminStatusLabel">Non abilitato</span>
+        <button id="adminToggleBtn" class="btn ghost" type="button">Sblocca</button>
+      </div>
+    </div>
+
+    <div class="card form">
+      <h3>Account dispositivo</h3>      <p class="hint">Il tuo nome compare nello storico dei movimenti. Salvato solo su questo dispositivo.</p>
+      <div class="row" style="align-items:center">
+        <span id="currentUserLabel" style="flex:1;font-weight:600"></span>
+        <button id="changeNameBtn" class="btn ghost" type="button" style="flex-shrink:0">Cambia nome</button>
+      </div>
+    </div>
+
+    <div class="card form">
+      <h3>Condivisione tra colleghi</h3>
+      <p class="hint">Inserisci i dati del progetto Supabase. Lascia vuoto per usare solo questo dispositivo.</p>
+      <label>URL progetto
+        <input id="sbUrl" type="url" placeholder="https://xxxx.supabase.co">
+      </label>
+      <label>Chiave anon (pubblica)
+        <input id="sbKey" type="text" placeholder="eyJ…">
+      </label>
+      <div class="row">
+        <button id="saveSync" class="btn primary" type="button">Salva e collega</button>
+        <button id="disconnectSync" class="btn ghost" type="button">Scollega</button>
+      </div>
+      <p id="syncMsg" class="hint"></p>
+    </div>
+
+    <div class="card form">
+      <h3>Esporta / importa</h3>
+      <div class="row">
+        <button id="exportItems" class="btn" type="button">Esporta magazzino (CSV)</button>
+        <button id="exportMoves" class="btn" type="button">Esporta storico (CSV)</button>
+      </div>
+      <label class="filebtn btn">Importa magazzino (CSV)
+        <input id="importFile" type="file" accept=".csv,text/csv" hidden>
+      </label>
+      <p class="hint">Colonne CSV: larghezza;altezza;quantita;soglia_riordino;codice_abb;note</p>
+    </div>
+
+    <div class="card form" id="installCard" hidden>
+      <h3>Installa l'app</h3>
+      <button id="installBtn" class="btn primary" type="button">Installa su questo dispositivo</button>
+    </div>
+  </section>
+</main>
+
+<button id="fab" class="fab" type="button" aria-label="Aggiungi canalina">+</button>
+
+<nav class="tabbar">
+  <button data-tab="magazzino" class="active" type="button">Magazzino</button>
+  <button data-tab="utilizzo" type="button">Utilizzo</button>
+  <button data-tab="storico" type="button">Storico</button>
+  <button data-tab="dati" type="button">Dati</button>
+</nav>
+
+<!-- Dialog nuova/modifica canalina -->
+<dialog id="itemDialog">
+  <form id="itemForm" method="dialog" class="form">
+    <h3 id="itemDialogTitle">Nuova canalina</h3>
+    <p class="hint" style="margin-top:-4px">Larghezza × altezza in mm</p>
+    <input type="hidden" id="itemId">
+    <div class="row">
+      <label>larghezza
+        <input id="fLarg" type="number" min="1" step="1" inputmode="numeric" placeholder="60" required>
+      </label>
+      <label>Altezza
+        <input id="fAlt" type="number" min="1" step="1" inputmode="numeric" placeholder="80" required>
+      </label>
+    </div>
+    <div class="row">
+      <label>Quantità (pezzi)
+        <input id="fQty" type="number" min="0" step="1" value="0" inputmode="numeric">
+      </label>
+      <label>Soglia riordino
+        <input id="fMin" type="number" min="0" step="1" value="0" inputmode="numeric">
+      </label>
+    </div>
+    <label>Codice articolo ABB
+      <input id="fCodice" type="text" placeholder="opzionale">
+    </label>
+    <label>Note / clienti principali
+      <textarea id="fNote" rows="3" placeholder="opzionale"></textarea>
+    </label>
+    <div class="row end">
+      <button id="deleteItem" class="btn danger" type="button" hidden>Elimina</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" value="cancel" type="submit" formnovalidate>Annulla</button>
+      <button id="saveItem" class="btn primary" type="button">Aggiungi</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Dialog carico/scarico rapido da item -->
+<dialog id="moveDialog">
+  <form id="moveDialogForm" class="form">
+    <h3 id="moveDlgTitle">Carico / Scarico</h3>
+    <input type="hidden" id="moveDlgId">
+    <div class="seg" role="radiogroup" aria-label="Tipo movimento">
+      <label><input type="radio" name="dlgTipo" value="scarico" checked> Prelievo</label>
+      <label><input type="radio" name="dlgTipo" value="carico"> Carico</label>
+    </div>
+    <label>Quantità
+      <input id="moveDlgQty" type="number" min="1" step="1" value="1" inputmode="numeric" required>
+    </label>
+    <label>Soglia riordino (aggiorna)
+      <input id="moveDlgMin" type="number" min="0" step="1" inputmode="numeric">
+    </label>
+    <label>Note / commessa
+      <input id="moveDlgNote" type="text" placeholder="facoltativo">
+    </label>
+    <div class="row end">
+      <button class="btn ghost" id="moveDlgCancel" type="button">Annulla</button>
+      <button class="btn primary" id="moveDlgSave" type="button">Registra</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Pannello notifiche (solo admin) -->
+<div id="notifPanel" class="notif-panel" hidden>
+  <div class="notif-panel-header">
+    <span>Articoli da riordinare</span>
+    <button id="notifMarkAll" class="btn ghost" type="button" style="font-size:.8rem;padding:4px 10px">Segna tutti come letti</button>
+  </div>
+  <ul id="notifList" class="notif-list"></ul>
+  <p id="notifEmpty" class="empty" style="padding:16px 0;font-size:.85rem">Nessuna notifica</p>
+</div>
+<div id="notifBackdrop" class="notif-backdrop" hidden></div>
+
+<!-- Dialog sblocco amministratore -->
+<dialog id="adminDialog">
+  <div class="form">
+    <h3>Sblocco amministratore</h3>
+    <p class="hint">Inserisci la password per abilitare le funzioni avanzate su questo dispositivo.</p>
+    <label>Password
+      <input id="adminPwInput" type="password" placeholder="••••••••" autocomplete="current-password">
+    </label>
+    <p id="adminPwError" class="hint" style="color:var(--brand);display:none">Password errata.</p>
+    <div class="row end">
+      <button class="btn ghost" id="adminCancelBtn" type="button">Annulla</button>
+      <button class="btn primary" id="adminConfirmBtn" type="button">Sblocca</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Dialog cambio nome -->
+<dialog id="renameDialog">
+  <div class="form">
+    <h3>Cambia nome</h3>
+    <input id="renameInput" type="text" placeholder="Il tuo nome" maxlength="40" autocomplete="name">
+    <div class="row end">
+      <button class="btn ghost" id="renameCancelBtn" type="button">Annulla</button>
+      <button class="btn primary" id="renameSaveBtn" type="button">Salva</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Schermata di benvenuto (primo accesso) -->
+<div id="welcomeScreen" class="welcome-overlay" hidden>
+  <div class="welcome-box">
+    <div class="welcome-logo"></div>
+    <h2 class="welcome-title">Canaline ABB</h2>
+    <p class="welcome-sub">Come ti chiami? Verrà mostrato nello storico dei movimenti.</p>
+    <input id="welcomeName" type="text" class="welcome-input" placeholder="Il tuo nome" maxlength="40" autocomplete="name">
+    <button id="welcomeBtn" class="btn primary welcome-btn" type="button">Inizia</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js" type="module"></script>
+</body>
+</html>
