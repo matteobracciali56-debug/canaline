@@ -370,9 +370,13 @@ function renderReorderTable() {
 function renderHistory() {
   $('#histList').innerHTML = movs.map(m => {
     const out = m.tipo === 'scarico';
+    // compatibile sia con local (larghezza/altezza) che con Supabase view (item_larg/item_alt)
+    const larg = m.larghezza ?? m.item_larg;
+    const alt  = m.altezza  ?? m.item_alt;
+    const nome = (larg && alt) ? `${larg} × ${alt}` : (m.codice || m.descrizione || '—');
     return `<li class="hist">
       <div class="main">
-        <div><strong>${esc(m.larghezza && m.altezza ? m.larghezza+'×'+m.altezza : (m.codice||''))}</strong></div>
+        <div><strong>${esc(nome)}</strong></div>
         <div class="meta">${fmtDate(m.created_at)}${m.utente ? ' · <b>'+esc(m.utente)+'</b>' : ''}${m.note ? ' · '+esc(m.note) : ''}</div>
       </div>
       <div class="delta ${out?'out':'in'}">${out?'−':'+'}${fmt(m.qty)}</div>
