@@ -1,4 +1,4 @@
-import { createStore } from './store.js';
+﻿import { createStore } from './store.js';
 import { runMigration } from './migrate.js';
 
 // $ = un elemento, $$ = tutti
@@ -583,10 +583,53 @@ $('#installBtn').addEventListener('click', async ()=>{
   deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall=null; $('#installCard').hidden=true;
 });
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+/* -- Notifiche Push (Firebase) -- */
+const VAPID_KEY = 'BNhnGLj1awcJq6mgIe_2b6GSt-HGixKkvqRwI4gj4bLtGNjFGiByp_kNKqIppa1KER5jhuVQ8mDSQQikEHAbFyQ';
+
+async function initPush() {
+  try {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+    if (Notification.permission === 'denied') return;
+    const sbUrl = localStorage.getItem('cabb.sbUrl');
+    const sbKey = localStorage.getItem('cabb.sbKey');
+    if (!sbUrl || !sbKey) return;
+    const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+    const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging.js');
+    const fbApp = getApps().length ? getApps()[0] : initializeApp({
+      apiKey: 'AIzaSyCwiPrjm7ldPhUOG8gu0h5BCo9pdbmpcnw',
+      authDomain: 'canaline-abb.firebaseapp.com',
+      projectId: 'canaline-abb',
+      storageBucket: 'canaline-abb.firebasestorage.app',
+      messagingSenderId: '451265391439',
+      appId: '1:451265391439:web:5e94bad1206c3b2e64333a'
+    });
+    const messaging = getMessaging(fbApp);
+    const sw = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: sw });
+    if (!token) return;
+    const saved = localStorage.getItem('cabb.pushToken');
+    if (token !== saved) {
+      await fetch(sbUrl + '/rest/v1/push_tokens', {
+        method: 'POST',
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey,
+          'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify({ token, utente: getUser() })
+      });
+      localStorage.setItem('cabb.pushToken', token);
+    }
+    onMessage(messaging, payload => {
+      const n = payload.notification;
+      toast(n.title + ': ' + n.body);
+    });
+  } catch(e) { console.warn('Push init:', e); }
+}
 
 /* ── Avvio ── */
-runMigration();   // one-shot: non fa nulla se già eseguita
+runMigration();
 initUser();
 if (getUser()) refresh();
+setTimeout(initPush, 3000);
 setInterval(()=>{ if(store.kind==='supabase'&&!document.hidden&&!dlg.open&&!moveDlg.open) refresh(true); },20000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&store.kind==='supabase') refresh(true); });
